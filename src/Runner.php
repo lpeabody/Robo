@@ -12,6 +12,7 @@ use Robo\Exception\TaskExitException;
 use League\Container\ContainerAwareInterface;
 use League\Container\ContainerAwareTrait;
 use Consolidation\Config\Util\EnvConfig;
+use Symfony\Component\Console\Tester\CommandTester;
 
 class Runner implements ContainerAwareInterface
 {
@@ -157,6 +158,26 @@ class Runner implements ContainerAwareInterface
     }
 
     /**
+     * @param array $argv
+     * @param null|string $appName
+     * @param null|string $appVersion
+     * @param null|\Symfony\Component\Console\Output\OutputInterface $output
+     */
+    public function getCommand($argv, $commandClass, $appName = null, $appVersion = null, $output = null) {
+        $argv = $this->shebang($argv);
+        $argv = $this->processRoboOptions($argv);
+        $app = null;
+        if ($appName && $appVersion) {
+            $app = Robo::createDefaultApplication($appName, $appVersion);
+        }
+        $commandFiles = $this->getRoboFileCommands($output);
+        $this->prepareRun($argv, $output, $app, $commandFiles, $this->classLoader);
+        $this->registerCommandClass($app, $commandClass);
+        $command = $app->get($argv->getFirstArgument());
+        return $command;
+    }
+
+    /**
      * Get a list of locations where config files may be loaded
      *
      * @param string $userConfig
@@ -190,7 +211,34 @@ class Runner implements ContainerAwareInterface
      */
     public function run($input = null, $output = null, $app = null, $commandFiles = [], $classLoader = null)
     {
-        // Create default input and output objects if they were not provided
+        $this->prepareRun($input, $output, $app, $commandFiles, $classLoader);
+
+        try {
+            $statusCode = $app->run($input, $output);
+        } catch (TaskExitException $e) {
+            $statusCode = $e->getCode() ?: 1;
+        }
+
+        // If there were any error conditions in bootstrapping Robo,
+        // print them only if the requested command did not complete
+        // successfully.
+        if ($statusCode) {
+            foreach ($this->errorConditions as $msg => $color) {
+                $this->yell($msg, 40, $color);
+            }
+        }
+        return $statusCode;
+    }
+
+    /**
+     * @param null|\Symfony\Component\Console\Input\InputInterface $input
+     * @param null|\Symfony\Component\Console\Output\OutputInterface $output
+     * @param null|\Robo\Application $app
+     * @param array[] $commandFiles
+     * @param null|ClassLoader $classLoader
+     */
+    public function prepareRun(&$input = null, &$output = null, $app = null, $commandFiles = [], $classLoader = null) {
+// Create default input and output objects if they were not provided
         if (!$input) {
             $input = new StringInput('');
         }
@@ -236,22 +284,6 @@ class Runner implements ContainerAwareInterface
         }
 
         $this->registerCommandClasses($app, $commandFiles);
-
-        try {
-            $statusCode = $app->run($input, $output);
-        } catch (TaskExitException $e) {
-            $statusCode = $e->getCode() ?: 1;
-        }
-
-        // If there were any error conditions in bootstrapping Robo,
-        // print them only if the requested command did not complete
-        // successfully.
-        if ($statusCode) {
-            foreach ($this->errorConditions as $msg => $color) {
-                $this->yell($msg, 40, $color);
-            }
-        }
-        return $statusCode;
     }
 
     /**
@@ -329,17 +361,10 @@ class Runner implements ContainerAwareInterface
         // If the command class is already an instantiated object, then
         // just use it exactly as it was provided to us.
         if (is_string($commandClass)) {
-            if (!class_exists($commandClass)) {
+            $commandClass = Robo::storeCommandInstance($commandClass);
+            if (!$commandClass) {
                 return;
             }
-            $reflectionClass = new \ReflectionClass($commandClass);
-            if ($reflectionClass->isAbstract()) {
-                return;
-            }
-
-            $commandFileName = "{$commandClass}Commands";
-            $container->share($commandFileName, $commandClass);
-            $commandClass = $container->get($commandFileName);
         }
         // If the command class is a Builder Aware Interface, then
         // ensure that it has a builder.  Every command class needs
