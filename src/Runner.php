@@ -237,8 +237,8 @@ class Runner implements ContainerAwareInterface
      * @param array[] $commandFiles
      * @param null|ClassLoader $classLoader
      */
-    public function prepareRun(&$input = null, &$output = null, $app = null, $commandFiles = [], $classLoader = null) {
-// Create default input and output objects if they were not provided
+    public function prepareRun(&$input = null, $output = null, $app = null, $commandFiles = [], $classLoader = null) {
+        // Create default input and output objects if they were not provided
         if (!$input) {
             $input = new StringInput('');
         }
