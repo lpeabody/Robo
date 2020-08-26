@@ -12,7 +12,6 @@ use Robo\Exception\TaskExitException;
 use League\Container\ContainerAwareInterface;
 use League\Container\ContainerAwareTrait;
 use Consolidation\Config\Util\EnvConfig;
-use Symfony\Component\Console\Tester\CommandTester;
 
 class Runner implements ContainerAwareInterface
 {
@@ -163,7 +162,7 @@ class Runner implements ContainerAwareInterface
      * @param null|string $appVersion
      * @param null|\Symfony\Component\Console\Output\OutputInterface $output
      */
-    public function getCommand($argv, $commandClass, $appName = null, $appVersion = null, $output = null) {
+    public function getCommandForTest($argv, $commandClass, $appName = null, $appVersion = null, $output = null) {
         $argv = $this->shebang($argv);
         $argv = $this->processRoboOptions($argv);
         $app = null;
