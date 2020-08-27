@@ -12,6 +12,7 @@ use Robo\Exception\TaskExitException;
 use League\Container\ContainerAwareInterface;
 use League\Container\ContainerAwareTrait;
 use Consolidation\Config\Util\EnvConfig;
+use Symfony\Component\Console\Output\StreamOutput;
 
 class Runner implements ContainerAwareInterface
 {
@@ -174,6 +175,15 @@ class Runner implements ContainerAwareInterface
         $this->registerCommandClass($app, $commandClass);
         $command = $app->get($argv->getFirstArgument());
         return $command;
+    }
+
+    public function getAppForTesting($appName = null, $appVersion = null) {
+        $app = Robo::createDefaultApplication($appName, $appVersion);
+        $output = new StreamOutput(fopen('php://memory', 'w'));
+        $commandFiles = $this->getRoboFileCommands($output); // $output is just used for printing error messages, it can be a throwaway stream
+        $container = Robo::createDefaultContainer(null, null, $app, null);
+        $this->registerCommandClasses($app, $commandFiles);
+        return $app;
     }
 
     /**
