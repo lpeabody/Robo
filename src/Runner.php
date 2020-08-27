@@ -12,6 +12,7 @@ use Robo\Exception\TaskExitException;
 use League\Container\ContainerAwareInterface;
 use League\Container\ContainerAwareTrait;
 use Consolidation\Config\Util\EnvConfig;
+use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\StreamOutput;
 
 class Runner implements ContainerAwareInterface
@@ -158,31 +159,37 @@ class Runner implements ContainerAwareInterface
     }
 
     /**
-     * @param array $argv
-     * @param null|string $appName
-     * @param null|string $appVersion
-     * @param null|\Symfony\Component\Console\Output\OutputInterface $output
+     * Return an initialized application loaded with specified commands and configuration.
+     *
+     * This should ONLY be used for testing purposes. Works well in conjunction with Symfony's CommandTester.
+     *
+     * @see https://symfony.com/doc/current/console.html#testing-commands
+     *
+     * @param string|null $appName
+     *   Name of the application.
+     * @param string|null $appVersion
+     *   Version of the application.
+     * @param string|null $commandFile
+     *   Name of the specific command file that should be included with the application.
+     * @param \Robo\Config\Config|null $config
+     *   Robo configuration to be used with the application.
+     * @param \Composer\Autoload\ClassLoader|null $classLoader
+     *   Class loader to use. If PHPUnit and the application runner rely on the same autoloader, this can be left null.
+     *
+     * @return \Robo\Application
+     *   Initialized application based on passed configuration and command classes.
      */
-    public function getCommandForTest($argv, $commandClass, $appName = null, $appVersion = null, $output = null) {
-        $argv = $this->shebang($argv);
-        $argv = $this->processRoboOptions($argv);
-        $app = null;
-        if ($appName && $appVersion) {
-            $app = Robo::createDefaultApplication($appName, $appVersion);
-        }
-        $commandFiles = $this->getRoboFileCommands($output);
-        $this->prepareRun($argv, $output, $app, $commandFiles, $this->classLoader);
-        $this->registerCommandClass($app, $commandClass);
-        $command = $app->get($argv->getFirstArgument());
-        return $command;
-    }
-
-    public function getAppForTesting($appName = null, $appVersion = null) {
+    public function getAppForTesting($appName = null, $appVersion = null, $commandFile = null, $config = null, $classLoader = null) {
         $app = Robo::createDefaultApplication($appName, $appVersion);
-        $output = new StreamOutput(fopen('php://memory', 'w'));
+        $output = new NullOutput();
         $commandFiles = $this->getRoboFileCommands($output); // $output is just used for printing error messages, it can be a throwaway stream
-        $container = Robo::createDefaultContainer(null, null, $app, null);
-        $this->registerCommandClasses($app, $commandFiles);
+        $container = Robo::createDefaultContainer(null, $output, $app, $config, $classLoader);
+        if (is_null($commandFile)) {
+            $this->registerCommandClasses($app, $commandFiles);
+        }
+        else {
+            $this->registerCommandClass($app, $commandFile);
+        }
         return $app;
     }
 
